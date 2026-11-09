@@ -9,19 +9,56 @@ optional **external auditor**.
 
 ## Run it
 
-Requires Node.js 18 or newer. No `npm install` needed: there are no dependencies.
+Requires Rust (stable, 1.94 or newer) and Node.js 22.12 or newer (only to build the UI).
 
 ```
-cd sthiranet-demo-app
-npm start            # or: node server.js
+make install         # once: UI dependencies
+make start           # builds the UI and the server, serves http://localhost:3000
 ```
 
-Open http://localhost:3000. Use a different port with `PORT=4000 npm start`.
+Use a different port with `PORT=4000 make start`. For UI work, `make dev` runs the API on :3000 and Vite
+with hot reload on http://localhost:5173.
 
-`npm test` runs the whole story against the backend and checks each claim (10 checks).
+`make test` runs the Rust tests: the whole story against the backend (the same 10 checks as before), HTTP
+smoke tests, the RFC 6962 and RFC 8785 reference vectors, the spec v1 test vectors, and property tests for
+Merkle proofs. It also type-checks the UI. `make check` adds formatting and clippy.
+
+### Cleaning up
+
+| Command | What it removes |
+| --- | --- |
+| `make stop` | Stops a running demo server. All demo state (batches, ledger copies, trails, activity) lives only in that process's memory, so stopping it clears it. Nothing is written to disk. |
+| `make clean` | `make stop`, then every build output: the Rust `target/` folder (compiled binaries, test builds, incremental caches), the built UI (`demo/ui/dist`), Vite's cache and the generated `openapi.json`. |
+| `make distclean` | `make clean`, plus the installed UI dependencies (`demo/ui/node_modules`). Run `make install` before the next build. |
+
+The generated TypeScript API types (`demo/ui/src/api/schema.d.ts`) are kept, since they are source the UI is built
+from; `make build` regenerates them anyway.
 
 The demo opens on a live network: each subsidiary already has 3 anchored batches, and HQ already
 holds a copy of each trail. **Reset demo** (click twice) restores that starting point at any time.
+
+## Share it (free hosting on Render)
+
+The repo carries a `Dockerfile` (UI + server in one ~120 MB image) and a `render.yaml` Blueprint for a free
+Render web service.
+
+1. Push this branch to GitHub.
+2. In Render: **New → Blueprint**, pick the repository. Render reads `render.yaml` and creates the
+   `sthiranet-demo` service on the free plan.
+3. Share the `https://sthiranet-demo-….onrender.com` link once the first deploy finishes.
+
+Things to know about the free plan: the service sleeps after about 15 minutes without visitors, and the first
+visit after that takes 30–60 seconds while it wakes. Every wake-up starts from a freshly seeded demo. All
+viewers share one demo (one person's **Reset** or tampering is everyone's), and there is no sign-in, so share
+the link only with the people you mean to. Suspend the service in Render when you're done.
+
+To try the image locally: `docker build -t sthiranet-demo . && docker run --rm -p 3000:3000 sthiranet-demo`.
+
+For a live session from your own laptop instead, `cloudflared tunnel --url http://localhost:3000` gives a
+temporary public link with no account.
+
+The UI works on phones: below 760 px wide the page scrolls as one document, tabs stay pinned at the top, and
+wide tables and Merkle trees scroll sideways inside their own boxes.
 
 ## Screen layout
 
@@ -81,17 +118,21 @@ synchronizer, only hashes cross it.
 
 ## How it maps to Sthiranet's architecture
 
-The code is split along the three layers of the technical overview, so the same skeleton can grow into
-the MVP or be re-skinned for another industry:
+The code follows the build plan's layers and crate names, so the foundation can grow into the MVP and
+everything demo-only can be deleted cleanly. Nothing in `crates/` depends on `demo/`.
 
 | Layer | Folder | In this demo |
 | --- | --- | --- |
-| Kernel | `src/kernel/` | `crypto.js`: salted leaves, RFC 6962-style Merkle tree, chained heads. `ledger.js`: a stand-in for Canton (per-party node copies, co-signed appends, archive needs every signatory, synchronizer sees only encrypted envelopes). |
-| Connector | `src/connectors/` | `finance-profile.js`: simulated ERP tables and Debezium change events for journal entries and vendors, plus their business meaning. A CCTV or lending demo would swap only this file. |
-| Node | `src/node/` | `subsidiary.js`: pending changes, sealing batches, the off-ledger audit store. `verifier.js`: recomputes and compares. |
+| Kernel | `crates/sthira-core` | Hashing spec v1: RFC 8785 canonical JSON, 32-byte salted leaves, RFC 6962 Merkle tree and inclusion proofs, chained heads, genesis. Pure Rust, no I/O. |
+| Kernel | `crates/sthira-ledger` | The `AuditLedger` trait and `SimLedger`, a stand-in for Canton (per-party node copies, co-signed appends, archive needs every signatory, synchronizer sees only encrypted envelopes). A Canton client will implement the same trait. |
+| Connector | `crates/sthira-profiles` | The finance profile: simulated ERP tables and Debezium change events for journal entries and vendors, normalisation, and business meaning. A CCTV or lending demo would swap only this crate. |
+| Node | `crates/sthira-batcher` | A subsidiary node: pending changes, sealing batches, the off-ledger audit store. |
+| Node | `crates/sthira-verify` | Recomputes leaves, roots and heads and compares them with the verifier's own ledger copy. |
+| Demo only | `demo/demo-director` | Wires the parties together (rename the cast at the top of `src/world.rs`), auto-anchoring, the HTTP API (axum) with live updates over server-sent events, and the OpenAPI spec. |
+| Demo only | `demo/ui` | React + Vite + TypeScript. API types are generated from the OpenAPI spec (`make api`), so a backend change breaks the UI build instead of the live demo. |
 
-`src/demo.js` wires the parties together (rename the cast at the top of that file) and `server.js`
-exposes it over HTTP. The UI lives in `public/`.
+`test-vectors/hashing-v1.json` is produced by an independent Python implementation of the spec
+(`test-vectors/generate.py`); `sthira-core` must reproduce every value.
 
 ### What is simplified
 
@@ -101,6 +142,6 @@ This is a presentation demo, not the build plan's backend. In particular:
   relies on: each party keeps its own copy, every member co-signs, a fork or skipped sequence is
   refused, and archiving needs every signatory. The real system uses the Daml templates in the build plan.
 - **No real Debezium or databases.** Changes are generated in memory in Debezium's event shape.
-- **The hashing is real** (SHA-256, salted leaves, Merkle trees, chained heads), following the build
-  plan's hashing spec in a simplified form.
+- **The hashing is real** and follows the build plan's hashing spec v1 exactly (RFC 8785 canonical JSON,
+  32-byte salts, RFC 6962 Merkle trees, heads over `seq`, log positions, time window and event count).
 - State is in memory and resets when the server restarts.

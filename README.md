@@ -1,6 +1,6 @@
-# Sthiranet · Group Audit Trail Demo
+# Sthiranet · Audit Trail Demo
 
-A small web app for live presentations. It shows how a group's audit trail is batched, hashed into
+A small web app for live presentations. It shows how an audit trail for corporations involving multiple parties is batched, hashed into
 Merkle roots, co-signed on a ledger, and how recomputing the hashes catches a trail that was altered
 after the fact. You do the narration; the app gives you the visuals.
 

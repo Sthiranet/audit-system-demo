@@ -42,97 +42,12 @@ holds a copy of each trail. **Reset demo** (click twice) restores that starting 
 The repo carries a `Dockerfile` (UI + server in one ~120 MB image) and a `render.yaml` Blueprint for a free
 Render web service.
 
-1. Push this branch to GitHub.
-2. In Render: **New → Blueprint**, pick the repository. Render reads `render.yaml` and creates the
+1. In Render: **New → Blueprint**, pick the repository. Render reads `render.yaml` and creates the
    `sthiranet-demo` service on the free plan.
-3. Share the `https://sthiranet-demo-….onrender.com` link once the first deploy finishes.
-
-Things to know about the free plan: the service sleeps after about 15 minutes without visitors, and the first
-visit after that takes 30–60 seconds while it wakes. Every wake-up starts from a freshly seeded demo. All
-viewers share one demo (one person's **Reset** or tampering is everyone's), and there is no sign-in, so share
-the link only with the people you mean to. Suspend the service in Render when you're done.
+2. Share the `https://sthiranet-demo-….onrender.com` link once the first deploy finishes.
 
 To try the image locally: `docker build -t sthiranet-demo . && docker run --rm -p 3000:3000 sthiranet-demo`.
-
-For a live session from your own laptop instead, `cloudflared tunnel --url http://localhost:3000` gives a
-temporary public link with no account.
-
-The UI works on phones: below 760 px wide the page scrolls as one document, tabs stay pinned at the top, and
-wide tables and Merkle trees scroll sideways inside their own boxes.
-
-## Screen layout
-
-- **Network strip** (top): HQ, S1–S3 and the auditor. Click a subsidiary to select it. The dot on each
-  subsidiary is its last verification result (green: match, red: tamper found).
-- **Activity** (right): everything that happened, in order. **Hide activity** gives the diagrams more
-  room on a projector.
-- **Auto-anchor every 10 s** (top right): each subsidiary captures a few changes and seals a batch every
-  10 seconds, so the network looks alive while you talk. Turn it off before a scripted sequence.
-
-Four tabs, in story order:
-
-| Tab | What it shows |
-| --- | --- |
-| 1 · Capture & batch | Changes captured by Debezium (click a row for the raw event). **Seal batch** hashes each change into a salted leaf, builds the Merkle tree (animated) and shows the AuditAnchor stored on the ledger: `seq`, `merkle_root`, `prev_head`, `head`, signatories. Browse older batches with prev/next. |
-| 2 · Ledger | The ledger as stored on any party's node. HQ holds all three chains; S1 holds only its own. Only fingerprints are on it. **Try to rewrite history** shows that no single party can archive an anchor. **What the synchronizer sees** shows encrypted envelopes only. |
-| 3 · Off-ledger audit trail | The structured records, in the subsidiary's store or in HQ's received copy. **Alter** / **Delete** play the corrupt employee or the bug. **Push trail to HQ** sends the trail upstream. |
-| 4 · Verify | HQ (or the auditor) recomputes every leaf, root and head from the trail and compares them with the anchors on **its own** ledger copy. Mismatches are shown per batch, with the recomputed tree and the altered record highlighted. |
-
-## Click-through for the narration
-
-**1. The setup.** Point at the network strip: HQ in R, subsidiaries in R1–R3, one private
-synchronizer, only hashes cross it.
-
-**2. How the ledger side works** (tab 1, S1 selected)
-1. Click **+10**. Open one row to show a Debezium change event and the normalised event.
-2. Click **Seal batch**. The tree builds from the 10 leaves up to the Merkle root.
-3. Scroll to step 3: the AuditAnchor with `seq`, `merkle_root`, `prev_head` (the previous batch's head)
-   and `head`, signed by S1 and HQ.
-4. Tab 2: the chain of anchors, linked by heads. Switch between **HQ** and **S1** to show that HQ holds
-   S1's chained hashes on its own node, and S1 cannot see S2's chain.
-
-**3. The two benefits**
-- *Immutability*: tab 2 → **Try to rewrite history** → S1, chain S1, anchor 2 → **Attempt to archive**.
-  Rejected: HQ did not sign. Repeat with HQ as the actor: rejected, S1 did not sign.
-- *Integrity*: the tamper story below.
-- *Data residency* (if asked): tab 2's lead text and the synchronizer table. Records stay in each
-  region; only roots, heads, counts and time windows are shared.
-
-**4. The tamper story**
-1. Tab 3, S1, **S1's audit store**. Click **Alter** on a journal entry in batch #2 (its amount changes
-   tenfold). Optionally tick *recompute the stored leaf hash* first, to show that covering your
-   tracks doesn't help.
-2. Click **Push S1's trail to HQ**. The altered trail is now upstream.
-3. Optional: switch to **HQ's received copy** to show that it looks perfectly normal.
-4. Tab 4, verifier **HQ**, chain **S1** → **Run verification**. Batch #2's recomputed root does not
-   match the root anchored on HQ's ledger copy, the altered record is highlighted in the tree, and
-   every later head fails too, because each head includes the one before it. S1's dot turns red.
-
-**5. The auditor (reserve)**
-1. Click **Add auditor**. Every chain now has three members; new anchors carry three signatures
-   (seal a batch in tab 1 to show it).
-2. Tab 4, verifier **Auditor** → **Run verification**: the auditor checks the trail HQ holds against
-   its own ledger copy.
-3. To show that HQ is accountable too: tab 3 → **HQ's received copy** → **Alter** a record → tab 4,
-   verifier **Auditor** → the auditor catches HQ's edit.
-
-## How it maps to Sthiranet's architecture
-
-The code follows the build plan's layers and crate names, so the foundation can grow into the MVP and
-everything demo-only can be deleted cleanly. Nothing in `crates/` depends on `demo/`.
-
-| Layer | Folder | In this demo |
-| --- | --- | --- |
-| Kernel | `crates/sthira-core` | Hashing spec v1: RFC 8785 canonical JSON, 32-byte salted leaves, RFC 6962 Merkle tree and inclusion proofs, chained heads, genesis. Pure Rust, no I/O. |
-| Kernel | `crates/sthira-ledger` | The `AuditLedger` trait and `SimLedger`, a stand-in for Canton (per-party node copies, co-signed appends, archive needs every signatory, synchronizer sees only encrypted envelopes). A Canton client will implement the same trait. |
-| Connector | `crates/sthira-profiles` | The finance profile: simulated ERP tables and Debezium change events for journal entries and vendors, normalisation, and business meaning. A CCTV or lending demo would swap only this crate. |
-| Node | `crates/sthira-batcher` | A subsidiary node: pending changes, sealing batches, the off-ledger audit store. |
-| Node | `crates/sthira-verify` | Recomputes leaves, roots and heads and compares them with the verifier's own ledger copy. |
-| Demo only | `demo/demo-director` | Wires the parties together (rename the cast at the top of `src/world.rs`), auto-anchoring, the HTTP API (axum) with live updates over server-sent events, and the OpenAPI spec. |
-| Demo only | `demo/ui` | React + Vite + TypeScript. API types are generated from the OpenAPI spec (`make api`), so a backend change breaks the UI build instead of the live demo. |
-
-`test-vectors/hashing-v1.json` is produced by an independent Python implementation of the spec
-(`test-vectors/generate.py`); `sthira-core` must reproduce every value.
+For a temporary live session use `cloudflared tunnel --url http://localhost:3000`.
 
 ### What is simplified
 

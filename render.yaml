@@ -2,7 +2,7 @@
 # Render sets PORT itself; demo-director reads it.
 services:
   - type: web
-    name: sthiranet-demo
+    name: sthiranet-audit-system-demo
     runtime: docker
     plan: free
     region: singapore

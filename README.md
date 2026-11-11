@@ -1,8 +1,6 @@
 # Sthiranet · Audit Trail Demo
 
-A small web app for live presentations. It shows how an audit trail for corporations involving multiple parties is batched, hashed into
-Merkle roots, co-signed on a ledger, and how recomputing the hashes catches a trail that was altered
-after the fact. You do the narration; the app gives you the visuals.
+A small web app for live presentations. It shows how an audit trail for corporations involving multiple parties is batched, hashed into Merkle roots, co-signed on a ledger, and how recomputing the hashes catches a trail that was altered.
 
 The cast follows the story: **HQ** in Region R, subsidiaries **S1, S2, S3** in Regions R1–R3, and an
 optional **external auditor**.
@@ -59,4 +57,4 @@ This is a presentation demo, not the build plan's backend. In particular:
 - **No real Debezium or databases.** Changes are generated in memory in Debezium's event shape.
 - **The hashing is real** and follows the build plan's hashing spec v1 exactly (RFC 8785 canonical JSON,
   32-byte salts, RFC 6962 Merkle trees, heads over `seq`, log positions, time window and event count).
-- State is in memory and resets when the server restarts.
+- **No Preserved State** State is in memory and resets when the server restarts.

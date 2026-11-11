@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StateView } from '../api/client';
 import { Hash, fmtTime, partyName, plural } from '../ui';
+import logo from '../assets/logo.png';
 
 export function TopBar(props: {
   auto: boolean;
@@ -26,7 +27,7 @@ export function TopBar(props: {
   return (
     <header className="topbar">
       <div className="brand">
-        <span className="logo">◆</span>
+        <img className="logo" src={logo} alt="" />
         <span className="brand-name">Sthiranet</span>
         <span className="brand-sub">Group audit trail · live demo</span>
       </div>

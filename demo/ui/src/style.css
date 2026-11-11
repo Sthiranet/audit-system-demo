@@ -38,7 +38,7 @@ pre { font: 11.5px/1.45 var(--mono); white-space: pre-wrap; word-break: break-al
   padding: 10px 20px; border-bottom: 1px solid var(--line); flex: none;
 }
 .brand { display: flex; align-items: baseline; gap: 10px; }
-.logo { color: var(--gold); font-size: 18px; }
+.logo { height: 26px; width: auto; align-self: center; }
 .brand-name { font-size: 20px; font-weight: 300; letter-spacing: .08em; }
 .brand-sub { color: var(--cream-3); font-size: 13px; }
 .top-actions { display: flex; align-items: center; gap: 12px; }
